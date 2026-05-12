@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SlackModal, ModalSection } from '../components/SlackModal';
 import { SlackButton } from '../components/SlackButton';
 import { SlackbotMessage } from '../components/SlackbotMessage';
+import { SlackbotFollowUp } from '../components/SlackbotFollowUp';
 import { AppSummary } from '../components/AppSummary';
 import { ScopesSection } from '../components/ScopesSection';
 import { AutoInstallOption } from '../components/AutoInstallOption';
@@ -14,12 +15,18 @@ export function SlackbotFlow() {
   const [loading, setLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [approved, setApproved] = useState(false);
+  const [approvedWithAutoInstall, setApprovedWithAutoInstall] = useState(false);
+  const [ruleModalOpen, setRuleModalOpen] = useState(false);
+  const [ruleAutoInstall, setRuleAutoInstall] = useState(true);
 
   const handleApprove = () => {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
       setModalOpen(false);
+      setApproved(true);
+      setApprovedWithAutoInstall(autoInstall);
       const msg = autoInstall
         ? `${mockManagerApp.name} approved. Auto-install rule created for child agent apps.`
         : `${mockManagerApp.name} approved for ${mockWorkspace.name}.`;
@@ -29,13 +36,36 @@ export function SlackbotFlow() {
     }, 1200);
   };
 
+  const handleCreateRule = () => {
+    setRuleModalOpen(true);
+  };
+
+  const handleSaveRule = () => {
+    setRuleModalOpen(false);
+    setApprovedWithAutoInstall(true);
+    setToastMessage('Auto-install automation rule created successfully.');
+    setToastVisible(true);
+  };
+
+  const handleReset = () => {
+    setApproved(false);
+    setApprovedWithAutoInstall(false);
+    setAutoInstall(false);
+  };
+
   return (
     <div style={pageStyle}>
       <div style={contextStyle}>
         <div style={contextHeaderStyle}>
-          <h3 style={{ margin: 0, fontSize: '16px' }}>Entrypoint 3: Slackbot DM Notification</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '16px' }}>Entrypoint 3: Slackbot DM Notification</h3>
+            {approved && (
+              <button style={resetBtnStyle} onClick={handleReset}>Reset Demo</button>
+            )}
+          </div>
           <p style={contextDescStyle}>
             Admin receives a Slackbot DM when a new app request is created. Clicking "Review and Approve for Workspace" opens the approval modal.
+            {approved && <strong> After approval, a follow-up message prompts the admin to set up an auto-install rule.</strong>}
           </p>
         </div>
         <div style={slackLayoutStyle}>
@@ -59,6 +89,8 @@ export function SlackbotFlow() {
             <div style={sidebarDividerStyle} />
             <div style={sidebarSectionStyle}>
               <span style={sidebarSectionTitleStyle}>Channels</span>
+              <SidebarChannel label="general" />
+              <SidebarChannel label="random" />
             </div>
             <div style={sidebarDividerStyle} />
             <div style={sidebarSectionStyle}>
@@ -96,6 +128,17 @@ export function SlackbotFlow() {
                 onApproveClick={() => setModalOpen(true)}
                 onRestrictClick={() => {}}
               />
+
+              {approved && (
+                <SlackbotFollowUp
+                  appName={mockManagerApp.name}
+                  appIcon={mockManagerApp.icon}
+                  workspaceName={mockWorkspace.name}
+                  adminName="a]6a2d9fhost_user"
+                  autoInstallEnabled={approvedWithAutoInstall}
+                  onCreateRule={handleCreateRule}
+                />
+              )}
             </div>
             <div style={footerBannerStyle}>
               This conversation hosts automated updates from Slackbot. <span style={{ color: '#1264a3', cursor: 'pointer' }}>Start a new conversation</span>
@@ -104,6 +147,7 @@ export function SlackbotFlow() {
         </div>
       </div>
 
+      {/* Approval modal */}
       <SlackModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -137,6 +181,32 @@ export function SlackbotFlow() {
         </ModalSection>
       </SlackModal>
 
+      {/* Rule creation modal (triggered from follow-up message) */}
+      <SlackModal
+        isOpen={ruleModalOpen}
+        onClose={() => setRuleModalOpen(false)}
+        title="Create auto-install rule"
+        footer={
+          <>
+            <SlackButton variant="outline" onClick={() => setRuleModalOpen(false)}>Cancel</SlackButton>
+            <SlackButton variant="primary" onClick={handleSaveRule}>Create Rule</SlackButton>
+          </>
+        }
+      >
+        <ModalSection>
+          <p style={{ fontSize: '14px', color: 'var(--sk-color-text-secondary)', margin: '0 0 12px', lineHeight: '1.5' }}>
+            Create an automation rule to auto-approve child agent apps created by <strong>{mockManagerApp.name}</strong>.
+          </p>
+        </ModalSection>
+        <ModalSection borderBottom={false}>
+          <AutoInstallOption
+            checked={ruleAutoInstall}
+            onChange={setRuleAutoInstall}
+            appName={mockManagerApp.name}
+          />
+        </ModalSection>
+      </SlackModal>
+
       <Toast
         message={toastMessage}
         visible={toastVisible}
@@ -150,6 +220,15 @@ function SidebarItem({ icon, label }: { icon: string; label: string }) {
   return (
     <div style={sidebarItemStyle}>
       <span style={{ fontSize: '14px' }}>{icon}</span>
+      <span style={{ fontSize: '13px' }}>{label}</span>
+    </div>
+  );
+}
+
+function SidebarChannel({ label }: { label: string }) {
+  return (
+    <div style={sidebarItemStyle}>
+      <span style={{ fontSize: '12px', opacity: 0.6 }}>#</span>
       <span style={{ fontSize: '13px' }}>{label}</span>
     </div>
   );
@@ -192,9 +271,20 @@ const contextDescStyle: React.CSSProperties = {
   marginTop: '4px',
 };
 
+const resetBtnStyle: React.CSSProperties = {
+  fontSize: '12px',
+  padding: '4px 10px',
+  border: '1px solid var(--sk-color-border-medium)',
+  borderRadius: '4px',
+  backgroundColor: 'white',
+  cursor: 'pointer',
+  color: 'var(--sk-color-text-secondary)',
+  fontWeight: 600,
+};
+
 const slackLayoutStyle: React.CSSProperties = {
   display: 'flex',
-  minHeight: '480px',
+  minHeight: '520px',
 };
 
 const darkSidebarStyle: React.CSSProperties = {
